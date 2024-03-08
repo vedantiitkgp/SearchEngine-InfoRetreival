@@ -2,6 +2,7 @@ import os
 import json
 import time
 import nltk
+import re
 nltk.download('punkt')
 
 from nltk.stem.porter import PorterStemmer
@@ -10,8 +11,9 @@ from collections import defaultdict
 from bs4 import BeautifulSoup
 
 class Inverted_Indexer:
-    def __init__(self, dataset_path, inverted_index_file, tfidf_file):
+    def __init__(self, dataset_path, index_file, inverted_index_file, tfidf_file):
         self.dataset_path = dataset_path
+        self.index_file = index_file
         self.inverted_index_file = inverted_index_file
         self.tfidf_file = tfidf_file
 
@@ -19,6 +21,7 @@ class Inverted_Indexer:
         self.doc_id = 0
         self.doc_id_to_url = {}
         self.inverted_index = defaultdict(dict)
+        self.index= defaultdict(dict)
         self.count_docs = defaultdict(int)
         self.tfidf_table = defaultdict(dict)
 
@@ -29,27 +32,46 @@ class Inverted_Indexer:
             self.doc_id += 1
             self.doc_id_to_url = file["url"]
             soup = BeautifulSoup(file["content"], "html.parser")
-            token_to_count = self.tokenize(soup.get_text())
+            token_to_count = self.tokenize(soup.get_text(separator=' '))
             
             for token, count in token_to_count.items():
                 self.inverted_index[token][file["url"]] = count
+                self.index[file['url']][token] = count
                 if not file['url'] in self.count_docs:
                     self.count_docs[file["url"]] = count
                 else:
                     self.count_docs[file["url"]] += count
+            
+            ## Adding extra weight to heading words
+            headings = soup.find_all(re.compile('^h[1-6]$'))
+            for heading in headings:
+                heading_text = heading.get_text(separator=' ').strip()
+                heading_tokens = self.tokenize(heading_text)
+                for heading_token in heading_tokens:
+                    if heading_token in self.inverted_index:
+                        if file['url'] in self.inverted_index[heading_token]:
+                            self.inverted_index[heading_token][file["url"]] += 1
+                        else:
+                            print("CASE 1",heading_token,file['url'])
+                            self.inverted_index[heading_token][file["url"]] = 1
+                    else:
+                        print("CASE 2",heading_token)
+                        self.inverted_index[heading_token][file["url"]] = 1
 
     def tokenize(self, text):
         token_to_count = defaultdict(int)
         tokens = word_tokenize(text)
         for t in tokens:
-            token_to_count[self.ps.stem(t.lower())] += 1
+            token_to_count[str(self.ps.stem(t.lower()))] += 1
         return token_to_count
 
     def dump(self):
         data = defaultdict(dict)
         with open(self.inverted_index_file, "w", encoding='utf-8') as f:
             json.dump(self.inverted_index, f)
-    
+        with open(self.index_file, "w", encoding='utf-8') as f:
+            json.dump(self.index, f)
+
     """
     Function to Calculate TF-IDF Score
     """
@@ -72,6 +94,7 @@ class Inverted_Indexer:
             for name in files:
                 if name != ".DS_Store":
                     self.process(subdir + os.sep + name)
+                    print(name, "Done")
             count = count + 1
 
         self.dump()
@@ -85,7 +108,8 @@ class Inverted_Indexer:
 if __name__ == '__main__':
     dataset_path = "DEV/"
     inverted_index_file = "inverted_index.json"
+    index_file = "index.json"
     tfidf_file = "tfidf.json"
 
-    i = Inverted_Indexer(dataset_path, inverted_index_file, tfidf_file)
+    i = Inverted_Indexer(dataset_path, index_file, inverted_index_file, tfidf_file)
     i.start()
