@@ -5,6 +5,7 @@ from nltk.tokenize import word_tokenize
 from nltk.stem.porter import PorterStemmer
 from collections import defaultdict
 import argparse
+import time 
 
 class RetreivalAugmentation:
     def __init__(self, threshold):
@@ -51,30 +52,34 @@ class RetreivalAugmentation:
         """
         Called on Each query
         """
-        print("Start call called")
+        print('start query')
+        currtime = time.perf_counter()
         tokens = list(self.inverted_index.keys())    
         query_token_count =  self.tokenize(self.query, tokens)
         query_vector = self.generate_query_vector(tokens, query_token_count)
-
         for token in query_token_count:
             self.query_token_docs.update(self.inverted_index[token].keys())
         
-        print("Query Token completed")
         doc_ids_list = list(self.query_token_docs)
 
         updated_doc_ids = {}
 
-        print("Doc ids completed")
+        print('no of docs for cosine sim' , len(doc_ids_list))
+        time1 = time.perf_counter()
         for doc_id in doc_ids_list:
+            time3 = time.perf_counter()
             document_vector = self.generate_document_vector(doc_id, tokens)
+            print('generate doc vector- ',  time.perf_counter() - time3)
+            time4 = time.perf_counter()
             updated_doc_ids[doc_id] = self.cosine_similarity(query_vector,document_vector)
-
-        print("Sorted doc ids completed")
+            print('cosine func - ',  time.perf_counter() - time4)
+            
+        print('cosine similarity - ',  time.perf_counter() - time1)
         sorted_doc_id_dict = dict(sorted(updated_doc_ids.items(), key=lambda item: item[1]))
         threshold_doc_id_dict = dict(list(sorted_doc_id_dict.items())[-self.threshold:])
         
-        print("TF IDF Doc ids completed")
         tfidf_docid_dict = {}
+        time2 = time.perf_counter()
         for token in query_token_count:
             for doc_id in threshold_doc_id_dict:
                 if doc_id in self.tfidf_table[token]:
@@ -82,19 +87,28 @@ class RetreivalAugmentation:
                         tfidf_docid_dict[doc_id] = self.tfidf_table[token][doc_id]
                     else:
                         tfidf_docid_dict[doc_id] += self.tfidf_table[token][doc_id]
-
+        print('idf score loop - ',  time.perf_counter() - time2)
         sorted_tfidf_docid_dict = dict(sorted(tfidf_docid_dict.items(), key=lambda item: item[1]))
         top_results = dict(list(sorted_tfidf_docid_dict.items())[-5:])
+        print('final time', currtime - time.perf_counter())
+        print(top_results.keys())
+        print('-'*100)
         return top_results.keys()
     
     def query_call(self, parser):
-        print("Query call called")
         # Add arguments
         # print("Query called")
         # parser.add_argument('query', type=str, help='Your Query')
         # args = parser.parse_args()
-        self.query = "This is a book"
+        self.query = "Iftekhar ahmed"
         self.start()
+        self.query = "machine learning"
+        self.start()
+        self.query = "ACM"
+        self.start()
+        self.query = "master of software engineering"
+        self.start()
+        
 
     def initate_call(self):
         print("Initiate call called")
