@@ -6,6 +6,8 @@ from nltk.stem.porter import PorterStemmer
 from collections import defaultdict
 import argparse
 import time 
+from scipy.sparse import csr_matrix
+from sklearn.metrics.pairwise import cosine_similarity
 
 class RetreivalAugmentation:
     def __init__(self, threshold):
@@ -36,7 +38,6 @@ class RetreivalAugmentation:
             else:
                 query_vector.append(0)
         return query_vector
-
     def generate_document_vector(self, doc_id, doc_vector, index_dict):
         for token in self.index[doc_id]:
             doc_vector[index_dict[token]] = self.index[doc_id][token]
@@ -52,15 +53,12 @@ class RetreivalAugmentation:
         print('start query')
         currtime = time.perf_counter()
         tokens = list(self.inverted_index.keys())
-        print('total tokens', len(tokens))
+        index_dict = {key: index for index, key in enumerate(self.inverted_index.keys())}
         query_token_count =  self.tokenize(self.query, tokens)
         query_vector = self.generate_query_vector(tokens, query_token_count)
         for token in query_token_count:
             self.query_token_docs.update(self.inverted_index[token].keys())
-
         doc_ids_list = list(self.query_token_docs)
-        print('len doc ids' , len(doc_ids_list))
-
         print('no of docs for cosine sim' , len(doc_ids_list))
 
         filtered_docid_dict = {}
@@ -82,12 +80,10 @@ class RetreivalAugmentation:
         print(len(doc_ids_list))
         doc_id_vectors = [[0]*len(tokens)]*len(doc_ids_list)
         time1 = time.perf_counter()
-
         print('1st main loop - ',  time1 - time0)
         
         for i, doc_id in enumerate(doc_ids_list):
             doc_id_vectors[i] = self.generate_document_vector(doc_id, doc_id_vectors[i], self.inverted_index_dict)
-
 
         cosine_doc_ids = list(cosine_similarity([query_vector],doc_id_vectors)[0])
         updated_doc_ids = {key: value for key, value in zip(doc_ids_list, cosine_doc_ids)}
@@ -133,7 +129,6 @@ class RetreivalAugmentation:
             self.start()
           else:
             break
-
 
     def initate_call(self):
         print("Initiate call called")
