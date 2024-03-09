@@ -6,6 +6,8 @@ from nltk.stem.porter import PorterStemmer
 from collections import defaultdict
 import argparse
 import time 
+from scipy.sparse import csr_matrix
+from sklearn.metrics.pairwise import cosine_similarity
 
 class RetreivalAugmentation:
     def __init__(self, threshold):
@@ -36,13 +38,9 @@ class RetreivalAugmentation:
                 query_vector.append(0)
         return query_vector
     
-    def generate_document_vector(self, doc_id, tokens):
-        doc_vector = []
-        for token in tokens:
-            if token in self.index[doc_id]:
-                doc_vector.append(self.index[doc_id][token])
-            else:
-                doc_vector.append(0)
+    def generate_document_vector(self, doc_id, doc_vector, index_dict):
+        for token in self.index[doc_id]:
+            doc_vector[index_dict[token]] = self.index[doc_id][token]
         return doc_vector
 
     def cosine_similarity(self, vector_a, vector_b):
@@ -54,26 +52,23 @@ class RetreivalAugmentation:
         """
         print('start query')
         currtime = time.perf_counter()
-        tokens = list(self.inverted_index.keys())    
+        tokens = list(self.inverted_index.keys())
+        index_dict = {key: index for index, key in enumerate(self.inverted_index.keys())}
         query_token_count =  self.tokenize(self.query, tokens)
         query_vector = self.generate_query_vector(tokens, query_token_count)
         for token in query_token_count:
             self.query_token_docs.update(self.inverted_index[token].keys())
         
         doc_ids_list = list(self.query_token_docs)
-
-        updated_doc_ids = {}
+        doc_id_vectors = [[0]*len(tokens)]*len(doc_ids_list)
 
         print('no of docs for cosine sim' , len(doc_ids_list))
         time1 = time.perf_counter()
-        for doc_id in doc_ids_list:
-            time3 = time.perf_counter()
-            document_vector = self.generate_document_vector(doc_id, tokens)
-            print('generate doc vector- ',  time.perf_counter() - time3)
-            time4 = time.perf_counter()
-            updated_doc_ids[doc_id] = self.cosine_similarity(query_vector,document_vector)
-            print('cosine func - ',  time.perf_counter() - time4)
+        for i, doc_id in enumerate(doc_ids_list):
+            doc_id_vectors[i] = self.generate_document_vector(doc_id, doc_id_vectors[i], index_dict)
             
+        cosine_doc_ids = list(cosine_similarity([query_vector],doc_id_vectors)[0])
+        updated_doc_ids = {key: value for key, value in zip(doc_ids_list, cosine_doc_ids)}
         print('cosine similarity - ',  time.perf_counter() - time1)
         sorted_doc_id_dict = dict(sorted(updated_doc_ids.items(), key=lambda item: item[1]))
         threshold_doc_id_dict = dict(list(sorted_doc_id_dict.items())[-self.threshold:])
@@ -100,14 +95,14 @@ class RetreivalAugmentation:
         # print("Query called")
         # parser.add_argument('query', type=str, help='Your Query')
         # args = parser.parse_args()
-        self.query = "Iftekhar ahmed"
-        self.start()
-        self.query = "machine learning"
-        self.start()
+        # self.query = "Iftekhar ahmed"
+        # self.start()
+        # self.query = "machine learning"
+        # self.start()
         self.query = "ACM"
         self.start()
-        self.query = "master of software engineering"
-        self.start()
+        # self.query = "master of software engineering"
+        # self.start()
         
 
     def initate_call(self):
