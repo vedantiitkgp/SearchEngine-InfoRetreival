@@ -10,6 +10,7 @@ from nltk.stem.porter import PorterStemmer
 from nltk.tokenize import word_tokenize
 from collections import defaultdict
 from bs4 import BeautifulSoup
+import networkx as nx
 
 class Inverted_Indexer:
     def __init__(self, dataset_path, index_file, inverted_index_file, tfidf_file):
@@ -84,12 +85,21 @@ class Inverted_Indexer:
     Function to Calculate TF-IDF Score
     """
     def calculate_dump_tfidf(self):
+        self.page = nx.DiGraph()
+
+        for term , term_dict in self.inverted_index.items():     
+            for url, count in term_dict.items():
+                self.page.add_node(url)
+            self.page.add_edges_from([(url, terms[0]) for terms in term_dict])
+
+        self.pageScores = nx.pagerank(self.page)
+
         for term , term_dict in self.inverted_index.items():
             count_urls = len(term_dict)
             for url, count in term_dict.items():
                 term_freq = count / self.count_docs[url]
                 inverse_doc_freq = self.doc_id / count_urls
-                self.tfidf_table[term][url] = term_freq * inverse_doc_freq
+                self.tfidf_table[term][url] = term_freq * inverse_doc_freq * self.pageScores.get(url, 0)
 
         tfidf_string = json.dumps(self.tfidf_table)
         compressed_tfidf = gzip.compress(tfidf_string.encode('utf-8'))

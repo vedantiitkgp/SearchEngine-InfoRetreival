@@ -19,6 +19,7 @@ class RetreivalAugmentation:
         self.inverted_index_dict= {}
 
 
+
     def tokenize(self, text, corpus_tokens):
         token_to_count = defaultdict(int)
         tokens = word_tokenize(text)
@@ -121,6 +122,7 @@ class RetreivalAugmentation:
 
     def initate_call(self):
         print('--- Reading Index and TfIdf Json ---- ')
+        print("Please wait before entering a query")
 
         with gzip.open('compressed_index.json.gz', 'rb') as index_file:
             compressed_index_file = index_file.read()
@@ -137,8 +139,6 @@ class RetreivalAugmentation:
             compressed_tfidf_file = tfidf_file.read()
             decompressed_tfidf_file = gzip.decompress(compressed_tfidf_file) 
             self.tfidf_table = json.load(decompressed_tfidf_file)
-
-        print("Please wait before entering a query")
         self.query_call()
 
 
