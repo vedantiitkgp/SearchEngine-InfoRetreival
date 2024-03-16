@@ -2,6 +2,7 @@ import os
 import json
 import time
 import nltk
+import gzip
 import re
 nltk.download('punkt')
 
@@ -67,10 +68,17 @@ class Inverted_Indexer:
 
     def dump(self):
         data = defaultdict(dict)
-        with open(self.inverted_index_file, "w", encoding='utf-8') as f:
-            json.dump(self.inverted_index, f)
-        with open(self.index_file, "w", encoding='utf-8') as f:
-            json.dump(self.index, f)
+        inverted_index_string = json.dumps(self.inverted_index)
+        compressed_inverted_index = gzip.compress(inverted_index_string.encode('utf-8'))
+
+        with gzip.open(self.inverted_index_file, 'wb') as compressed_file:
+            compressed_file.write(compressed_inverted_index)
+        
+        index_string = json.dumps(self.index)
+        compressed_index = gzip.compress(index_string.encode('utf-8'))
+            
+        with gzip.open(self.index_file, 'wb') as compressed_file:
+            compressed_file.write(compressed_index)
 
     """
     Function to Calculate TF-IDF Score
@@ -82,9 +90,12 @@ class Inverted_Indexer:
                 term_freq = count / self.count_docs[url]
                 inverse_doc_freq = self.doc_id / count_urls
                 self.tfidf_table[term][url] = term_freq * inverse_doc_freq
+
+        tfidf_string = json.dumps(self.tfidf_table)
+        compressed_tfidf = gzip.compress(tfidf_string.encode('utf-8'))
             
-        with open(self.tfidf_file, "w", encoding='utf-8') as f:
-            json.dump(self.tfidf_table, f)
+        with gzip.open(self.tfidf_file, 'wb') as compressed_file:
+            compressed_file.write(compressed_tfidf)
     
     def start(self):
         start = time.perf_counter()
@@ -107,9 +118,9 @@ class Inverted_Indexer:
 
 if __name__ == '__main__':
     dataset_path = "DEV/"
-    inverted_index_file = "inverted_index.json"
-    index_file = "index.json"
-    tfidf_file = "tfidf.json"
+    inverted_index_file = "compressed_inverted_index.json.gz"
+    index_file = "compressed_index.json.gz"
+    tfidf_file = "compressed_tfidf.json.gz"
 
     i = Inverted_Indexer(dataset_path, index_file, inverted_index_file, tfidf_file)
     i.start()

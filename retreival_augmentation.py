@@ -1,4 +1,5 @@
 import json
+import gzip
 import numpy as np
 from numpy.linalg import norm
 from nltk.tokenize import word_tokenize
@@ -120,16 +121,23 @@ class RetreivalAugmentation:
 
     def initate_call(self):
         print('--- Reading Index and TfIdf Json ---- ')
-        with open('index.json', 'r') as index_file:
-            self.index = json.load(index_file)
 
-        with open('inverted_index.json', 'r') as inverted_index_file:
-            self.inverted_index = json.load(inverted_index_file)
+        with gzip.open('compressed_index.json.gz', 'rb') as index_file:
+            compressed_index_file = index_file.read()
+            decompressed_index_file = gzip.decompress(compressed_index_file)
+            self.index = json.load(decompressed_index_file)
+        
+        with gzip.open('compressed_inverted_index.json.gz', 'rb') as inverted_index_file:
+            compressed_inverted_index_file = inverted_index_file.read()
+            decompressed_inverted_index_file = gzip.decompress(compressed_inverted_index_file)
+            self.inverted_index = json.load(decompressed_inverted_index_file)
             self.inverted_index_dict = {key: index for index, key in enumerate(self.inverted_index.keys())}
 
+        with gzip.open('compressed_tfidf.json.gz', 'rb') as tfidf_file:
+            compressed_tfidf_file = tfidf_file.read()
+            decompressed_tfidf_file = gzip.decompress(compressed_tfidf_file) 
+            self.tfidf_table = json.load(decompressed_tfidf_file)
 
-        with open('tfidf.json', 'r') as tfidf_file:
-            self.tfidf_table = json.load(tfidf_file)
         print("Please wait before entering a query")
         self.query_call()
 
