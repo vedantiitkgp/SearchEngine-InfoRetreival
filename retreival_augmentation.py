@@ -1,5 +1,7 @@
 import json
 import gzip
+import math
+import time
 import numpy as np
 import tkinter as tk
 from tkinter import *
@@ -8,19 +10,20 @@ from nltk.tokenize import word_tokenize
 from nltk.stem.porter import PorterStemmer
 from collections import defaultdict
 from sklearn.metrics.pairwise import cosine_similarity
-
+import networkx as nx
 
 class RetreivalAugmentation:
     def __init__(self, threshold):
         self.ps = PorterStemmer()
         self.inverted_index = {}
-        self.index = {}
+        self.pagerank = {}
         self.query = ''
         self.tfidf_table  = {}
         self.query_token_docs = set()
-        self.threshold = threshold
         self.inverted_index_dict= {}
-
+        self.pagerank_scores = {}
+        self.results = []
+        
 
 
     def tokenize(self, text, corpus_tokens):
@@ -31,124 +34,102 @@ class RetreivalAugmentation:
             if stem_token in corpus_tokens:
                 token_to_count[stem_token] += 1
         return token_to_count
-
-    def generate_query_vector(self, tokens, query_token_count):
-        query_vector = []
-        for token in tokens:
-            if token in query_token_count:
-                query_vector.append(query_token_count[token])
-            else:
-                query_vector.append(0)
-        return query_vector
-    
-    def generate_document_vector(self, doc_id, doc_vector, index_dict):
-        for token in self.index[doc_id]:
-            doc_vector[index_dict[token]] = self.index[doc_id][token]
-        return doc_vector
-
+        
     def start(self):
         """
         Called on Each query
         """
-        tokens = list(self.inverted_index.keys())
-        query_token_count =  self.tokenize(self.query, tokens)
-        query_vector = self.generate_query_vector(tokens, query_token_count)
-        self.query_token_docs = set()
-        for token in query_token_count:
-            self.query_token_docs.update(self.inverted_index[token].keys())
-        doc_ids_list = list(self.query_token_docs)
-
-        print("No of Docs Related to this query :", len(doc_ids_list))
-        global totalDocs 
-        totalDocs= len(doc_ids_list)
-
-        filtered_docid_dict = {}
-        for token in query_token_count:
-            for doc_id in doc_ids_list:
-                if doc_id in self.tfidf_table[token]:
-                    if doc_id not in filtered_docid_dict:
-                        filtered_docid_dict[doc_id] = self.tfidf_table[token][doc_id]
-                    else:
-                        filtered_docid_dict[doc_id] += self.tfidf_table[token][doc_id]
-
-
-        sorted_filtered_docid_dict = dict(sorted(filtered_docid_dict.items(), key=lambda item: item[1]))
-        doc_ids_list = list(dict(list(sorted_filtered_docid_dict.items())[-500:]).keys())
-      
-        doc_id_vectors = [[0]*len(tokens) for _ in range(len(doc_ids_list))]
+        currTime = time.perf_counter()
+        query_token_count =  self.tokenize(self.query, self.tokens)
+        query_idf_weights = {term: 1+ math.log10(query_token_count[term])
+                             for term in query_token_count.keys()}
         
-        for i, doc_id in enumerate(doc_ids_list):
-            doc_id_vectors[i] = self.generate_document_vector(doc_id, doc_id_vectors[i], self.inverted_index_dict)
+        query_tfidf_relevance_score = defaultdict(float)
 
-        cosine_doc_ids = list(cosine_similarity([query_vector],doc_id_vectors)[0])
-        updated_doc_ids = {key: value for key, value in zip(doc_ids_list, cosine_doc_ids)}
 
-        sorted_doc_id_dict = dict(sorted(updated_doc_ids.items(), key=lambda item: item[1]))
-        threshold_doc_id_dict = dict(list(sorted_doc_id_dict.items())[-self.threshold:])
 
-        tfidf_docid_dict = {}
-        for token in query_token_count:
-            for doc_id in threshold_doc_id_dict:
-                if doc_id in self.tfidf_table[token]:
-                    if doc_id not in tfidf_docid_dict:
-                        tfidf_docid_dict[doc_id] = self.tfidf_table[token][doc_id]
-                    else:
-                        tfidf_docid_dict[doc_id] += self.tfidf_table[token][doc_id]
 
-        sorted_tfidf_docid_dict = dict(sorted(tfidf_docid_dict.items(), key=lambda item: item[1]))
-        top_results = dict(list(sorted_tfidf_docid_dict.items())[-5:])
+        #Cosine similarity calculations
+        for term in query_token_count:
+            for url in self.inverted_index[term]:
+                tfidf = self.tfidf_table[term][url]  
+                tfidf_score = query_idf_weights[term] * tfidf   
+                query_tfidf_relevance_score[url] += tfidf_score
+        
+        # Calculate relevance score based on cosine similarity and pagerank
+        for url, score in query_tfidf_relevance_score.items():
+            query_tfidf_relevance_score[url] = 0.8*score + 0.2*self.pagerank[url] 
+
+        sorted_query_tfidf_relevance_score = dict(sorted(query_tfidf_relevance_score.items(), key=lambda item: item[1]))
+        top_results = list(sorted_query_tfidf_relevance_score.keys())[-5:]
+        
         for result in reversed(top_results):
-            print(f"- {result} \n")
+            print(f"- {result, sorted_query_tfidf_relevance_score[result]} \n")
+
+        endTime = time.perf_counter()
+        print('Time taken to run this query - ', endTime-currTime)
         print('-'*100)
-        return 
+        return top_results
 
     def query_call(self, inp): 
         self.query = inp
-        self.start()
+        self.results = self.start()
         while True:
           permission = input("Do you want to run another query: (y/n) ")
           if permission == "y":
             query = input("Enter your new Query: ")
             print("--- Processing this query ---")
             self.query = query
-            self.start()
+            self.results = self.start()
           else:
             break
+          
+    def calculate_page_rank(self):
+        url_graph = nx.DiGraph()
+        for token , url_dict in self.inverted_index.items():     
+            for url, count in url_dict.items():
+                url_graph.add_node(url)
+            url_graph.add_edges_from([(url, terms[0]) for terms in url_dict])
 
+        self.pageScores = nx.pagerank(url_graph)
+        return 
+    
     def initate_call(self):
         print('--- Reading PageRank, Inverted Index and TfIdf Json ---- ')
 
-        with gzip.open('compressed_index.json.gz', 'rb') as index_file:
-            compressed_index_file = index_file.read()
-            decompressed_index_file = gzip.decompress(compressed_index_file)
-            self.index = json.loads(decompressed_index_file.decode('utf-8'))
+        with gzip.open('compressed_pagerank.json.gz', 'rb') as pagerank_file:
+            compressed_pagerank_file = pagerank_file.read()
+            decompressed_pagerank_file = gzip.decompress(compressed_pagerank_file)
+            self.pagerank = json.loads(decompressed_pagerank_file.decode('utf-8'))
         
         with gzip.open('compressed_inverted_index.json.gz', 'rb') as inverted_index_file:
             compressed_inverted_index_file = inverted_index_file.read()
             decompressed_inverted_index_file = gzip.decompress(compressed_inverted_index_file)
             self.inverted_index = json.loads(decompressed_inverted_index_file.decode('utf-8'))
             self.inverted_index_dict = {key: index for index, key in enumerate(self.inverted_index.keys())}
+            self.tokens = self.inverted_index_dict.keys()
 
         with gzip.open('compressed_tfidf.json.gz', 'rb') as tfidf_file:
             compressed_tfidf_file = tfidf_file.read()
-            decompressed_tfidf_file = gzip.decompress(compressed_tfidf_file)
+            decompressed_tfidf_file = gzip.decompress(compressed_tfidf_file) 
             self.tfidf_table = json.loads(decompressed_tfidf_file.decode('utf-8'))
+        
 
-#GUI partially taken from https://www.geeksforgeeks.org/how-to-get-the-input-from-tkinter-text-box/
+        
+        #GUI partially taken from https://www.geeksforgeeks.org/how-to-get-the-input-from-tkinter-text-box/
         frame = tk.Tk() 
         frame.title("Web Crawler") 
         frame.geometry('600x200') 
         
         def printInput(): 
             inp = inputtxt.get(1.0, "end-1c") 
-            self.query_call("Iftekhar ahmed")
-            lbl.config(text = "Number of Documents related to this query: "+totalDocs) 
+            self.query_call(inp)
             lbl.config(text = "Top 5 Results:") 
-           # lbl.config(text = "1: " + results[1]) 
-           # lbl.config(text = "2: " + results[2]) 
-           # lbl.config(text = "3: " + results[3]) 
-           # lbl.config(text = "4: " + results[4]) 
-           # lbl.config(text = "5: " + results[5]) 
+            lbl.config(text = "1: " + self.results[1]) 
+            lbl.config(text = "2: " + self.results[2]) 
+            lbl.config(text = "3: " + self.results[3]) 
+            lbl.config(text = "4: " + self.results[4]) 
+            lbl.config(text = "5: " + self.results[5]) 
         
         inputtxt = tk.Text(frame, 
                         height = 5, 
