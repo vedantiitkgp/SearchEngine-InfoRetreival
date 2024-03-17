@@ -68,6 +68,8 @@ class Inverted_Indexer:
             self.doc_id_to_url = file["url"]
             soup = BeautifulSoup(file["content"], "html.parser")
             links = [self.modify_if_relative(link.get('href'),file["url"]) for link in soup.find_all('a')]
+            if not self.G.has_node(file["url"]):
+                self.graph.add_node(file["url"])
             for link in links:
                 if link is not None:          
                     self.G.add_edge(file["url"], link)  
@@ -154,10 +156,10 @@ class Inverted_Indexer:
         # with open("pagerankScores1.json", "w", encoding='utf-8') as f:
         #     json.dump(pagerank_scores, f)
 
-        for url in self.pagerank:
-            if url not in pagerank_scores:
+        for url in self.pagerank: #parent urls(dev)
+            if url not in pagerank_scores:#parent + linked
                 self.pagerank[url] = 0
-                print('Not in pagerank', url)
+                #print('Not in pagerank', url)
             else:
                 self.pagerank[url] = 50*pagerank_scores[url]
 
