@@ -60,7 +60,7 @@ class RetreivalAugmentation:
         for url, score in query_tfidf_relevance_score.items():
             query_tfidf_relevance_score[url] = 0.8*score + 0.2*self.pagerank[url] 
 
-        sorted_query_tfidf_relevance_score = sorted(query_tfidf_relevance_score.items(), key=lambda item: item[1])
+        sorted_query_tfidf_relevance_score = dict(sorted(query_tfidf_relevance_score.items(), key=lambda item: item[1]))
         top_results = list(sorted_query_tfidf_relevance_score.keys())[-5:]
         
         for result in reversed(top_results):
@@ -107,6 +107,7 @@ class RetreivalAugmentation:
             decompressed_inverted_index_file = gzip.decompress(compressed_inverted_index_file)
             self.inverted_index = json.loads(decompressed_inverted_index_file.decode('utf-8'))
             self.inverted_index_dict = {key: index for index, key in enumerate(self.inverted_index.keys())}
+            self.tokens = self.inverted_index_dict.keys()
 
         with gzip.open('compressed_tfidf.json.gz', 'rb') as tfidf_file:
             compressed_tfidf_file = tfidf_file.read()
