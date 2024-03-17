@@ -1,11 +1,14 @@
 import json
 import gzip
 import numpy as np
+import tkinter as tk
+from tkinter import *
 from numpy.linalg import norm
 from nltk.tokenize import word_tokenize
 from nltk.stem.porter import PorterStemmer
 from collections import defaultdict
 from sklearn.metrics.pairwise import cosine_similarity
+
 
 class RetreivalAugmentation:
     def __init__(self, threshold):
@@ -17,6 +20,7 @@ class RetreivalAugmentation:
         self.query_token_docs = set()
         self.threshold = threshold
         self.inverted_index_dict= {}
+
 
 
     def tokenize(self, text, corpus_tokens):
@@ -55,6 +59,8 @@ class RetreivalAugmentation:
         doc_ids_list = list(self.query_token_docs)
 
         print("No of Docs Related to this query :", len(doc_ids_list))
+        global totalDocs 
+        totalDocs= len(doc_ids_list)
 
         filtered_docid_dict = {}
         for token in query_token_count:
@@ -94,20 +100,10 @@ class RetreivalAugmentation:
         for result in reversed(top_results):
             print(f"- {result} \n")
         print('-'*100)
-        return
+        return 
 
-    def query_call(self):
-        print("-" * 50)
-        print("-" + " " * 48 + "-")
-        print("-" + " " * 6 + "/ \\ / \\ / \\ / \\ / \\ / \\" + " " * 6 + "-")
-        print("-" + " " * 6 + "\\ / \\ / \\ / \\ / \\ / \\/" + " " * 6 + "-")
-        print("-" + " " * 6 + "/ \\ / \\ / \\ / \\ / \\ / \\" + " " * 6 + "-")
-        print("-" + " " * 6 + "\\ / \\ / \\ / \\ / \\ / \\/" + " " * 6 + "-")
-        print("-" + " " * 48 + "-")
-        print("-" * 50)
-        query = input("Enter your Query: ")
-        print("--- Processing this query ---")
-        self.query = query
+    def query_call(self, inp): 
+        self.query = inp
         self.start()
         while True:
           permission = input("Do you want to run another query: (y/n) ")
@@ -121,25 +117,57 @@ class RetreivalAugmentation:
 
     def initate_call(self):
         print('--- Reading Index and TfIdf Json ---- ')
+        print("Please wait before entering a query")
 
         with gzip.open('compressed_index.json.gz', 'rb') as index_file:
             compressed_index_file = index_file.read()
             decompressed_index_file = gzip.decompress(compressed_index_file)
-            self.index = json.load(decompressed_index_file)
+            self.index = json.loads(decompressed_index_file)
         
         with gzip.open('compressed_inverted_index.json.gz', 'rb') as inverted_index_file:
             compressed_inverted_index_file = inverted_index_file.read()
             decompressed_inverted_index_file = gzip.decompress(compressed_inverted_index_file)
-            self.inverted_index = json.load(decompressed_inverted_index_file)
+            self.inverted_index = json.loads(decompressed_inverted_index_file)
             self.inverted_index_dict = {key: index for index, key in enumerate(self.inverted_index.keys())}
 
         with gzip.open('compressed_tfidf.json.gz', 'rb') as tfidf_file:
             compressed_tfidf_file = tfidf_file.read()
             decompressed_tfidf_file = gzip.decompress(compressed_tfidf_file) 
-            self.tfidf_table = json.load(decompressed_tfidf_file)
+            self.tfidf_table = json.loads(decompressed_tfidf_file)
 
-        print("Please wait before entering a query")
-        self.query_call()
+#GUI partially taken from https://www.geeksforgeeks.org/how-to-get-the-input-from-tkinter-text-box/
+        frame = tk.Tk() 
+        frame.title("Web Crawler") 
+        frame.geometry('600x200') 
+        
+        def printInput(): 
+            inp = inputtxt.get(1.0, "end-1c") 
+            self.query_call("Iftekhar ahmed")
+            lbl.config(text = "Number of Documents related to this query: "+totalDocs) 
+            lbl.config(text = "Top 5 Results:") 
+           # lbl.config(text = "1: " + results[1]) 
+           # lbl.config(text = "2: " + results[2]) 
+           # lbl.config(text = "3: " + results[3]) 
+           # lbl.config(text = "4: " + results[4]) 
+           # lbl.config(text = "5: " + results[5]) 
+        
+        inputtxt = tk.Text(frame, 
+                        height = 5, 
+                        width = 40) 
+        
+        inputtxt.pack() 
+        
+    
+        printButton = tk.Button(frame, 
+                                text = "Search",  
+                                command = printInput) 
+        printButton.pack() 
+        
+   
+        lbl = tk.Label(frame, text = "") 
+        lbl.pack() 
+        frame.mainloop() 
+        
 
 
 if __name__ == "__main__":
