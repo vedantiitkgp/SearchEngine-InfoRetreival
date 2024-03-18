@@ -60,7 +60,7 @@ class RetreivalAugmentation:
         top_results = list(sorted_query_tfidf_relevance_score.keys())[-5:]
         
         for result in reversed(top_results):
-            print(f"- {result, sorted_query_tfidf_relevance_score[result]} \n")
+            print(f"- {result} \n")
 
         endTime = time.perf_counter()
         print('Time taken to run this query - ', endTime-currTime)
@@ -70,12 +70,11 @@ class RetreivalAugmentation:
     def query_call(self, inp): 
         self.query = inp
         self.results = self.start()
-        print(self.results)
 
     
     def show_results(self):
         root1 = Tk()
-        root1.geometry('300x600') 
+        root1.geometry('300x500') 
         frm = tk.Frame(root1, padding=10)
         frm.grid()
         tk.Label(frm, text=self.results[0]).grid(column=0, row=0)
@@ -89,10 +88,8 @@ class RetreivalAugmentation:
         
     def initate_call(self):
         print('---  Reading TfIdf Json ---- ')
-        
         for filename in os.listdir(self.tfidf_folder):
             if filename.endswith('.gz'):
-                print(filename)
                 file_path = os.path.join(self.tfidf_folder, filename)
                 with gzip.open(file_path, 'rb') as tfidf_file:
                     compressed_tfidf_file = tfidf_file.read()
@@ -117,26 +114,24 @@ class RetreivalAugmentation:
         self.pagerank = nx.pagerank(self.G)
 
         def search_query():
-            query = input("Enter your Query: ")
-            # inp = entry.get()  # Get the search query from the entry widget
+            inp = entry.get()  # Get the search query from the entry widget
             # Perform the search (replace this with your actual search function)
-            self.query_call(query)
-            # self.show_results()
+            self.query_call(inp)
+            self.show_results()
 
-        search_query()
-        # root = Tk()
-        # root.geometry('300x600') 
-        # entry = tk.Entry(root, textvariable = 'Search Engine', justify = CENTER) 
+        root = Tk()
+        root.geometry('300x500') 
+        entry = tk.Entry(root, textvariable = 'Search Engine', justify = CENTER) 
   
         # focus_force is used to take focus 
         # as soon as application starts 
-        # entry.focus_force() 
-        # entry.pack(side = TOP, ipadx = 30, ipady = 6) 
+        entry.focus_force() 
+        entry.pack(side = TOP, ipadx = 30, ipady = 6) 
         
-        # search = tk.Button(root, text = 'Search', command = lambda : search_query()) 
-        # search.pack(side = TOP, pady = 10) 
+        search = tk.Button(root, text = 'Search', command = lambda : search_query()) 
+        search.pack(side = TOP, pady = 10) 
         
-        # root.mainloop()
+        root.mainloop()
                               
         #GUI partially taken from https://www.geeksforgeeks.org/how-to-get-the-input-from-tkinter-text-box/
         
