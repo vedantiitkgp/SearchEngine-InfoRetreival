@@ -60,29 +60,48 @@ class RetreivalAugmentation:
         top_results = list(sorted_query_tfidf_relevance_score.keys())[-5:]
         
         for result in reversed(top_results):
-            print(f"- {result} \n")
+            print(f"- {result}, {sorted_query_tfidf_relevance_score[result]} \n")
 
         endTime = time.perf_counter()
         print('Time taken to run this query - ', endTime-currTime)
         print('-'*100)
+        top_results.reverse()
         return top_results
 
     def query_call(self, inp): 
         self.query = inp
         self.results = self.start()
 
+    def open_link(event, url):
+        # Define the URL you want to open
+        # Code to open the URL in a web browser
+        # This example uses the webbrowser module
+        import webbrowser
+        webbrowser.open(url)
     
-    def show_results(self):
+    def show_results(self, query):
         root1 = Tk()
-        root1.geometry('300x500') 
+        root1.title('Top 5 results')
+        root1.geometry('450x300') 
         frm = tk.Frame(root1, padding=10)
         frm.grid()
-        tk.Label(frm, text=self.results[0]).grid(column=0, row=0)
-        tk.Label(frm, text=self.results[1]).grid(column=0, row=1)
-        tk.Label(frm, text=self.results[2]).grid(column=0, row=2)
-        tk.Label(frm, text=self.results[3]).grid(column=0, row=3)
-        tk.Label(frm, text=self.results[4]).grid(column=0, row=4)
+        heading = 'Top 5 results for Query - '
+        if not self.results:
+            heading = 'No Results returned for query'
+        tk.Label(frm, text=heading+query, font=("Arial", 12, "bold")).grid(column=0, row=0)
+
+        if self.results:
+            # Create the labels for each result and bind them to open links
+            lbls = []  # List to hold label widgets
+            for i in range(5):
+                lbl = tk.Label(frm, text=self.results[i], foreground="blue", cursor="hand2")
+                lbl.grid(column=0, row=i+1)
+                lbl.bind("<Button-1>", lambda event, link=self.results[i]: self.open_link(link))
+                lbls.append(lbl)  # Append label to the list
+        
+        # Create a Quit button to close the window
         tk.Button(frm, text="Quit", command=root1.destroy).grid(column=0, row=7)
+        
         root1.mainloop()
 
         
@@ -117,10 +136,11 @@ class RetreivalAugmentation:
             inp = entry.get()  # Get the search query from the entry widget
             # Perform the search (replace this with your actual search function)
             self.query_call(inp)
-            self.show_results()
+            self.show_results(inp)
 
         root = Tk()
-        root.geometry('300x500') 
+        root.title('Search Engine')
+        root.geometry('450x300') 
         entry = tk.Entry(root, textvariable = 'Search Engine', justify = CENTER) 
   
         # focus_force is used to take focus 
