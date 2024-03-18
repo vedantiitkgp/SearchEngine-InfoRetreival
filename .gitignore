@@ -161,6 +161,8 @@ cython_debug/
 
 DEV/
 
-index.json
-tfidf.json
-inverted_index.json
+index/
+neighbor/
+tfidf/
+.DS_Store
+

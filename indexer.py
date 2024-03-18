@@ -10,24 +10,32 @@ from nltk.stem.porter import PorterStemmer
 from nltk.tokenize import word_tokenize
 from collections import defaultdict
 from bs4 import BeautifulSoup
-import networkx as nx
-from urllib.parse import urlparse, urljoin, parse_qs
+from urllib.parse import urlparse, urljoin
 
 
 class Inverted_Indexer:
-    def __init__(self, dataset_path, pagerank_file, inverted_index_file, tfidf_file):
+    def __init__(self, dataset_path, inverted_index_file, tfidf_file, neighbors_index_file):
         self.dataset_path = dataset_path
-        self.pagerank_file = pagerank_file
         self.inverted_index_file = inverted_index_file
+        self.neighbors_index_file = neighbors_index_file
         self.tfidf_file = tfidf_file
-        self.G = nx.DiGraph()
         self.ps = PorterStemmer()
         self.doc_id = 0
-        self.doc_id_to_url = {}
         self.inverted_index = defaultdict(dict)
-        self.pagerank= defaultdict(dict)
+        self.neighbors = defaultdict(dict)
         self.count_docs = defaultdict(int)
-        self.tfidf_table = defaultdict(dict)  
+        self.tfidf_table = defaultdict(dict) 
+
+        self.index_dir = os.path.join(os.getcwd(), 'index')
+        self.neighbor_dir = os.path.join(os.getcwd(), 'neighbor')
+        self.tfidf_dir = os.path.join(os.getcwd(), 'tfidf')
+
+        # Create directories if they don't exist
+        if not os.path.exists(self.index_dir):
+            os.makedirs(self.index_dir)
+        if not os.path.exists(self.tfidf_dir):
+            os.makedirs(self.tfidf_dir)
+ 
 
     def modify_if_relative(self, relative_url,parent_url):
         if relative_url:
@@ -65,20 +73,21 @@ class Inverted_Indexer:
         with open(file_path, "r", encoding='utf-8') as f:
             file = json.load(f)
             self.doc_id += 1
-            self.doc_id_to_url = file["url"]
             soup = BeautifulSoup(file["content"], "html.parser")
             links = [self.modify_if_relative(link.get('href'),file["url"]) for link in soup.find_all('a')]
-            if not self.G.has_node(file["url"]):
-                self.graph.add_node(file["url"])
             for link in links:
                 if link is not None:          
-                    self.G.add_edge(file["url"], link)  
+                    if file["url"] not in self.neighbors:
+                        self.neighbors[file["url"]] = []
+
+                    if link not in self.neighbors[file["url"]]:
+                        self.neighbors[file["url"]].append(link)
+                    
 
             token_to_count = self.tokenize(soup.get_text(separator=' '))
             
             for token, count in token_to_count.items():
                 self.inverted_index[token][file["url"]] = count
-                self.pagerank[file["url"]] = 0
                 if not file['url'] in self.count_docs:
                     self.count_docs[file["url"]] = count
                 else:
@@ -107,27 +116,30 @@ class Inverted_Indexer:
             token_to_count[str(self.ps.stem(t.lower()))] += 1
         return token_to_count
 
-    def dump(self):
+    def dump(self, part):
         data = defaultdict(dict)
         
         inverted_index_string = json.dumps(self.inverted_index)
         compressed_inverted_index = gzip.compress(inverted_index_string.encode('utf-8'))
-
-        with gzip.open(self.inverted_index_file, 'wb') as compressed_file:
-            compressed_file.write(compressed_inverted_index)
         
-        pagerank_string = json.dumps(self.pagerank)
-        compressed_pagerank = gzip.compress(pagerank_string.encode('utf-8'))
-            
-        with gzip.open(self.pagerank_file, 'wb') as compressed_file:
-            compressed_file.write(compressed_pagerank)
+        print(os.path.join(self.index_dir,f"{self.inverted_index_file}_{part}.json.gz"))
+        with gzip.open(os.path.join(self.index_dir,f"{self.inverted_index_file}_{part}.json.gz"), 'wb') as compressed_file:
+            compressed_file.write(compressed_inverted_index)
+        self.inverted_index = defaultdict(dict)
+
+        neighbors_string = json.dumps(self.neighbors)
+        compressed_neighbors_index = gzip.compress(neighbors_string.encode('utf-8'))
+
+        print(os.path.join(self.neighbor_dir,f"{self.neighbors_index_file}_{part}.json.gz"))
+        with gzip.open(os.path.join(self.neighbor_dir,f"{self.neighbors_index_file}_{part}.json.gz"), 'wb') as compressed_file:
+            compressed_file.write(compressed_neighbors_index)
+        self.neighbors = defaultdict(dict)
         
 
     """
     Function to Calculate TF-IDF Score
     """
-    def calculate_dump_tfidf(self):
-        
+    def calculate_dump_tfidf(self, part):
         for term , term_dict in self.inverted_index.items():
             count_urls = len(term_dict)
             for url, count in term_dict.items():
@@ -138,33 +150,39 @@ class Inverted_Indexer:
         tfidf_string = json.dumps(self.tfidf_table)
         compressed_tfidf = gzip.compress(tfidf_string.encode('utf-8'))
             
-        with gzip.open(self.tfidf_file, 'wb') as compressed_file:
+        with gzip.open(os.path.join(self.tfidf_dir,f"{self.tfidf_file}_{part}.json.gz"), 'wb') as compressed_file:
             compressed_file.write(compressed_tfidf)
-            
+        self.tfidf_table = defaultdict(dict)
+    
     def start(self):
         start = time.perf_counter()
 
+        no_dir = 0
+        for _, _, _ in os.walk(self.dataset_path):
+            no_dir += 1
+
+        print("No of directories :",no_dir)
         count = 0
+        part = 1
         for subdir, dirs, files in os.walk(self.dataset_path):
             for name in files:
                 if name != ".DS_Store":
                     self.process(subdir + os.sep + name)
                     print(name, "Done")
-            count = count + 1
 
-        pagerank_scores = nx.pagerank(self.G)
-        # with open("pagerankScores1.json", "w", encoding='utf-8') as f:
-        #     json.dump(pagerank_scores, f)
-
-        for url in self.pagerank: #parent urls(dev)
-            if url not in pagerank_scores:#parent + linked
-                self.pagerank[url] = 0
-                #print('Not in pagerank', url)
-            else:
-                self.pagerank[url] = 50*pagerank_scores[url]
-
-        self.dump()
-        self.calculate_dump_tfidf()
+            if count == part * int(no_dir/4):
+                print("-"*100)
+                print(f"Part - {part}")
+                print("-"*100)
+                self.calculate_dump_tfidf(part)
+                self.dump(part)
+                part+=1
+            count +=1
+            print("Count --", count)
+        
+        self.calculate_dump_tfidf(part)
+        self.dump(part)
+        part+=1
 
         end = time.perf_counter()
         print("START - Total number of documents:{}".format(self.doc_id))
@@ -173,10 +191,10 @@ class Inverted_Indexer:
 
 if __name__ == '__main__':
     dataset_path = "DEV/"
-    inverted_index_file = "compressed_inverted_index.json.gz"
-    pagerank_file = "compressed_pagerank.json.gz"
-    tfidf_file = "compressed_tfidf.json.gz"
+    inverted_index_file = "compressed_inverted_index"
+    neighbors_index_file = "neighbors_index"
+    tfidf_file = "compressed_tfidf"
     
 
-    i = Inverted_Indexer(dataset_path, pagerank_file, inverted_index_file, tfidf_file)
+    i = Inverted_Indexer(dataset_path, inverted_index_file, tfidf_file, neighbors_index_file)
     i.start()
